@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * Implementation of hook_schema().
+ */
+function node_cache_install() {
+  drupal_install_schema('node_cache');
+}
+
+function node_cache_schema() {
+  $schema['cache_node'] = drupal_get_schema_unprocessed('system', 'cache');
+  $schema['cache_node']['description'] = 'Cache table for the nodes to store node_load() hook info.';
+
+  return $schema;
+}

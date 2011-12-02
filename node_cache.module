@@ -1,0 +1,102 @@
+<?php
+
+
+function node_cache_menu() {
+  $items = array();
+  $items['admin/settings/node_cache/settings'] = array(
+    'title' => 'Node cache Settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('node_cache_settings_form'),
+    'access arguments' => array('administer site configuration'),
+  );
+  
+  $items['admin/settings/node_cache/batch'] = array(
+    'title' => 'Node cache Batch form',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('node_cache_batch_form'),
+    'access arguments' => array('administer site configuration'),
+  );
+  
+  
+  return $items;
+}
+
+
+function node_cache_get($nid, $reset=FALSE) {
+  $expire = 3600;
+  if($cached = cache_get($nid, 'cache_node') && !$reset) {
+      //reset cached node.
+    $node = $cached->data;
+  }  
+  else {
+    $node = node_load($nid);
+    cache_set($nid, $data, 'cache_node', $expire);
+  }
+  
+  return $node;
+}
+
+function node_cache_batch_form() {
+  $form['node_cache_batch'] = array(
+    '#type' => 'select',
+    '#title' => 'Choose batch',
+    '#options' => array(
+      'node_cache_all_nodes' => 'Cache all Nodes')
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Go',
+  );
+
+  return $form;    
+}
+
+function node_cache_batch_form_submit($form, &$form_state) {
+  $values = &$form_state['values'];
+
+  $function = $values['node_cache_batch'];
+  $batch = $function();
+  batch_set($batch);
+
+  // Redirection takes place as usual.
+  $form_state['redirect'] = 'admin/settings/node_cache/settings';
+}    
+
+function node_cache_all_nodes() {
+  $result = db_result("SELECT nid FROM {node} ORDER BY nid ASC");
+
+  $operations = array();
+  while($node = db_fetch_object($result)) {
+    $operations[] = array('node_cache_op_1', array($node->nid));
+  }
+  $batch = array(
+    'operations' => $operations,
+    'finished' => 'node_cache_finished',
+  );
+  return $batch;
+}
+
+function node_cache_op_1($nid, &$context) {
+  $node = node_cache_get($nid, TRUE);
+
+  // Store some result for post-processing in the finished callback.
+  $context['results'][] = $node->nid . ' : ' . check_plain($node->title);
+
+  // Optional message displayed under the progressbar.
+  $context['message'] = t('Loading @title', array('@title' => $node->title));
+}
+
+function node_cache_finished($success, $results, $operations) {
+  if ($success) {
+    // Here we could do something meaningful with the results.
+    // We just display the number of nodes we processed...
+    $message = count($results) . ' processed.';
+  }
+  else {
+    // An error occurred.
+    // $operations contains the operations that remained unprocessed.
+    $error_operation = reset($operations);
+    $message = 'An error occurred while processing ' . $error_operation[0] . ' with arguments :' . print_r($error_operation[0], TRUE);
+  }
+  drupal_set_message($message);
+}
